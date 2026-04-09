@@ -3,7 +3,7 @@ import { motion } from 'framer-motion'
 import { Activity, Radio, Shield, AlertTriangle } from 'lucide-react'
 import { api } from '../api/client'
 import { useAuth } from '../context/AuthContext'
-import { useWildlifeSocket } from '../hooks/useWildlifeSocket'
+import { useWildlifeSocket } from '../hooks/useWildlifeSocket';
 import { DetectionTable } from '../components/DetectionTable'
 import { TacticalMap } from '../components/TacticalMap'
 import { normalizeDetection } from '../utils/detection'

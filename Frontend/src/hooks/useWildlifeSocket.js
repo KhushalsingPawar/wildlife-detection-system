@@ -1,70 +1,88 @@
-import { useEffect, useRef } from 'react'
-import SockJS from 'sockjs-client'
-import { Client } from '@stomp/stompjs'
-import { useAuth } from '../context/AuthContext'
+// src/hooks/useWildlifeSocket.js
+import { useEffect, useRef } from 'react';
+import SockJS from 'sockjs-client';
+import { Client } from '@stomp/stompjs';
+import { useAuth } from '../context/AuthContext';
 
 /**
- * Wildlife WebSocket Hook
- * Connects to Spring Boot STOMP via SockJS
- * Subscribes to /topic/alerts
+ * Custom Hook: useWildlifeSocket
+ * Connects to Spring Boot STOMP over SockJS
+ * Calls onAlert callback whenever a message arrives
  */
 export function useWildlifeSocket(onAlert) {
-    const { token } = useAuth()
-    const onAlertRef = useRef(onAlert)
+    const { token } = useAuth();
+    const onAlertRef = useRef(onAlert);
+    const clientRef = useRef(null);
 
-    // keep latest callback
+    // Keep the latest callback reference
     useEffect(() => {
-        onAlertRef.current = onAlert
-    }, [onAlert])
+        onAlertRef.current = onAlert;
+    }, [onAlert]);
 
     useEffect(() => {
-        // ✅ IMPORTANT: use proxy path
-        const sockUrl =
-            import.meta.env.VITE_WS_URL || '/ws'
+        if (!token) return;
 
-        const client = new Client({
-            webSocketFactory: () => new SockJS(sockUrl),
+        // Function to create and activate STOMP client
+        const connectWebSocket = () => {
+            const client = new Client({
+                webSocketFactory: () => new SockJS(
+                    import.meta.env.VITE_WS_URL || '/ws'),
+                reconnectDelay: 5000,
+                heartbeatIncoming: 10000,
+                heartbeatOutgoing: 10000,
+                connectHeaders: { Authorization: `Bearer ${token}` },
 
-            reconnectDelay: 5000,
-            heartbeatIncoming: 10000,
-            heartbeatOutgoing: 10000,
+                onConnect: () => {
+                    console.log('✅ WebSocket Connected');
 
-            connectHeaders: token ?
-                { Authorization: `Bearer ${token}` } :
-                {},
+                    // Subscribe to topic
+                    client.subscribe('/topic/alerts', (message) => {
+                        try {
+                            const data = JSON.parse(message.body);
+                            // Standard 'if' check to prevent formatter errors
+                            if (onAlertRef.current) {
+                                onAlertRef.current(data);
+                            }
+                        } catch (err) {
+                            console.warn('⚠️ Parse error:', err);
+                            // Standard 'if' check for raw messages
+                            if (onAlertRef.current) {
+                                onAlertRef.current(message.body);
+                            }
+                        }
+                    });
+                },
 
-            onConnect: () => {
-                console.log('✅ WebSocket Connected')
+                onStompError: (frame) => {
+                    // Manual check for headers to avoid syntax errors
+                    const msg = (frame.headers && frame.headers.message) ? frame.headers.message : frame.body;
+                    console.error('❌ STOMP Error:', msg);
+                },
 
-                client.subscribe('/topic/alerts', (message) => {
-                    try {
-                        const data = JSON.parse(message.body)
-                        onAlertRef.current ? .(data)
-                    } catch (err) {
-                        console.warn('Parse error:', err)
-                        onAlertRef.current ? .(message.body)
-                    }
-                })
-            },
+                onWebSocketError: (error) => {
+                    console.error('❌ WebSocket Error:', error);
+                },
 
-            onStompError: (frame) => {
-                console.warn('❌ STOMP', frame.headers ? .message || frame.body)
-            },
+                onDisconnect: () => {
+                    console.log('ℹ️ WebSocket Disconnected, attempting reconnect...');
+                },
 
-            onWebSocketError: (e) => {
-                console.warn('❌ WS Error', e)
-            },
+                debug: (msg) => console.log('[STOMP]', msg),
+            });
 
-            debug: (str) => {
-                console.log('[STOMP]', str)
-            },
-        })
+            client.activate();
+            clientRef.current = client;
+        };
 
-        client.activate()
+        connectWebSocket();
 
         return () => {
-            console.log('🛑 WebSocket Disconnected')
-            client.deactivate()
-        }
-    }, [token])
+            if (clientRef.current) {
+                clientRef.current.deactivate();
+                clientRef.current = null;
+                console.log('🛑 WebSocket Disconnected (cleanup)');
+            }
+        };
+    }, [token]);
+
 }
