@@ -35,7 +35,7 @@ WildGuard AI is an AI-powered real-time wildlife detection system designed to id
 cd backend
 mvn spring-boot:run
 
-### Backend
+### Frontend
 ```bash
 cd frontend
 npm install
