@@ -7,6 +7,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
@@ -25,15 +27,14 @@ import java.util.List;
 @CrossOrigin(origins = "*")
 public class DetectionController {
 
+    private static final Logger logger = LoggerFactory.getLogger(DetectionController.class);
+
     @Autowired
     private DetectionService service;
 
     @Autowired
     private S3Client s3Client;
 
-    // Check these names against your application.properties!
-    @Value("${aws.bucketName}") 
-    private String bucketName;
 
     @Value("${aws.accessKey}") 
     private String accessKey;
@@ -42,7 +43,10 @@ public class DetectionController {
     private String secretKey;
 
     @Value("${aws.region}") 
-    private String region;    
+    private String region;
+    
+    @Value("${aws.bucketName}")
+    private String bucketName;    
 
     @PostMapping("/upload")
     public Detection uploadDetection(
@@ -80,12 +84,10 @@ public class DetectionController {
                             .build(),
                     RequestBody.fromBytes(image.getBytes())
             );
-            // Constructing a reliable region-specific URL
             String imageUrl = String.format("https://%s.s3.%s.amazonaws.com/%s", bucketName, region, imageKey);
             detection.setImageUrl(imageUrl);
         }
 
-        // Process Video Upload
         if (video != null && !video.isEmpty()) {
             String videoKey = "videos/" + System.currentTimeMillis() + "_" + video.getOriginalFilename();
             s3Client.putObject(
@@ -116,15 +118,22 @@ public class DetectionController {
 
     @GetMapping("/latest-video")
     public Detection getLatestVideo() {
-        List<Detection> all = service.getAll();
-        if (all.isEmpty()) {    
-            return null;
-        }
-        // Return the most recent detection with a video
-        return all.stream()
-          .filter(d -> d.getVideoUrl() != null)
-          .sorted((d1, d2) -> d2.getId().compareTo(d1.getId())) // Get newest first
-          .findFirst()
-          .orElse(null);
+    List<Detection> all = service.getAll();
+    if (all.isEmpty()) {    
+        return null;
+    }
+    
+    // Find the newest detection that actually has a video record
+    Detection latest = all.stream()
+      .filter(d -> d.getVideoUrl() != null && !d.getVideoUrl().isEmpty())
+      .sorted((d1, d2) -> d2.getId().compareTo(d1.getId()))
+      .findFirst()
+      .orElse(null);
+
+    if (latest != null && !latest.getVideoUrl().startsWith("http")) {
+        latest.setVideoUrl("http://localhost:8082/uploads/" + latest.getVideoUrl());
+    }
+
+    return latest;
     }
 }

@@ -1,40 +1,18 @@
-import { useEffect, useState } from 'react'
 import { Radio } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { TacticalMap } from '../components/TacticalMap'
-import { api } from '../api/client'
 
 const glass =
   'backdrop-blur-md bg-white/5 border border-white/10 rounded-xl shadow-lg shadow-black/20'
 
-/** Placeholder detection point for demo map */
 const MOCK_DETECTION = { lat: 12.991, lng: 77.594 }
 
 export function LiveFeed() {
   const { canUseManualControls } = useAuth()
-  const [videoUrl, setVideoUrl] = useState('') // URL of latest S3 video
-
-  // Fetch latest video URL from backend API
-  useEffect(() => {
-    async function fetchLatestVideo() {
-      try {
-        const res = await api.get('/api/detect/latest-video') // backend endpoint
-        if (res.data && res.data.videoUrl) {
-          setVideoUrl(res.data.videoUrl)
-        }
-      } catch (err) {
-        console.error('Error fetching latest video:', err)
-      }
-    }
-
-    fetchLatestVideo()
-    const interval = setInterval(fetchLatestVideo, 5000) // refresh every 5 seconds
-    return () => clearInterval(interval)
-  }, [])
 
   async function tacticalLights() {
     try {
-      await api.post('/api/tactical/lights')
+      await fetch('/api/tactical/lights', { method: 'POST' })
     } catch {
       await new Promise((r) => setTimeout(r, 400))
     }
@@ -42,7 +20,7 @@ export function LiveFeed() {
 
   async function tacticalAlarm() {
     try {
-      await api.post('/api/tactical/alarm')
+      await fetch('/api/tactical/alarm', { method: 'POST' })
     } catch {
       await new Promise((r) => setTimeout(r, 400))
     }
@@ -71,22 +49,12 @@ export function LiveFeed() {
         </div>
 
         <div className="relative aspect-video w-full bg-gradient-to-br from-slate-900 via-[#0d1321] to-black">
-          {videoUrl ? (
-            <video
-              src={videoUrl}
-              controls
-              autoPlay
-              muted
-              loop
-              className="w-full h-full object-cover"
-            />
-          ) : (
-            <div className="absolute inset-0 flex items-center justify-center text-slate-500">
-              Loading live feed...
-            </div>
-          )}
+          <img
+            src="http://localhost:5000/video_feed"
+            alt="Live Camera Feed"
+            className="w-full h-full object-cover"
+          />
 
-          {/* Optional grid overlay */}
           <div
             className="absolute inset-0 opacity-30"
             style={{

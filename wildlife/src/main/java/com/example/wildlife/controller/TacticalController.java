@@ -10,15 +10,11 @@ public class TacticalController {
 
     @PostMapping("/lights")
     public String activateLights() {
-        // TODO: Implement actual lights control
-        System.out.println("🚨 Tactical lights activated!");
         return "Lights activated";
     }
 
     @PostMapping("/alarm")
     public String activateAlarm() {
-        // TODO: Implement actual alarm control
-        System.out.println("🚨 Tactical alarm activated!");
         return "Alarm activated";
     }
 }

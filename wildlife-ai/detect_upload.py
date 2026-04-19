@@ -26,7 +26,6 @@ while True:
     files = {'image': open(filename, 'rb')}
     data = {'animal': animal, 'category': category, 'confidence': confidence}
     response = requests.post(API_URL, files=files, data=data)
-    print(response.json())
 
     cv2.imshow("AI Detection", frame)
     if cv2.waitKey(1) & 0xFF == ord('q'):

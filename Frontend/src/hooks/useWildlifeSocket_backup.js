@@ -31,12 +31,9 @@ export function useWildlifeSocket(onAlert) {
             heartbeatIncoming: 10000, // 10s heartbeat incoming
             heartbeatOutgoing: 10000, // 10s heartbeat outgoing
 
-            connectHeaders: token ?
-                { Authorization: `Bearer ${token}` } :
-                {},
+            connectHeaders: token ? { Authorization: `Bearer ${token}` } : {},
 
             onConnect: () => {
-                console.log('✅ WebSocket Connected')
 
                 client.subscribe('/topic/alerts', (message) => {
                     try {
@@ -53,19 +50,14 @@ export function useWildlifeSocket(onAlert) {
                 console.warn('❌ STOMP Error:', frame.headers ? .message || frame.body)
             },
 
-            onWebSocketError: (e) => {
-                console.warn('❌ WebSocket Error:', e)
-            },
+            onWebSocketError: (e) => {},
 
-            debug: (str) => {
-                console.log('[STOMP]', str)
-            },
+            debug: (str) => {},
         })
 
         client.activate()
 
         return () => {
-            console.log('🛑 WebSocket Disconnected')
             client.deactivate()
         }
     }, [token])

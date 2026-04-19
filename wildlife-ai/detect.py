@@ -1,59 +1,62 @@
+from flask import Flask, Response
 import cv2
-import requests
 from ultralytics import YOLO
 import time
+import requests
 import os
+import threading
 
-print("🚀 Starting AI Detection System...")
+app = Flask(__name__)
 
 model = YOLO("yolov8n.pt")
+
 cap = cv2.VideoCapture(0)
-
 if not cap.isOpened():
-    print("❌ Camera not opened")
-    exit()
+    print("Error: Could not open camera")
+    exit(1)
 
-print("📷 Camera started")
-
-# ✅ FIX 1: Correct PORT (8082)
 API_URL = "http://localhost:8082/api/detect/upload"
-
 dangerous_animals = ["tiger", "lion", "bear", "elephant"]
 last_sent_time = 0
 cooldown = 5
 last_detected_label = ""
 
-while True:
-    ret, frame = cap.read()
-    if not ret:
-        print("❌ Frame error")
-        break
+def send_to_api(filename, data):
+    try:
+        with open(filename, 'rb') as img:
+            files = {'image': img}
+            requests.post(API_URL, files=files, data=data)
+    except:
+        pass
+    finally:
+        if os.path.exists(filename):
+            os.remove(filename)
 
-    results = model(frame)
+def generate_frames():
+    global last_sent_time, last_detected_label
 
-    for r in results:
-        for box in r.boxes:
-            cls = int(box.cls[0])
-            confidence = float(box.conf[0])
-            label = model.names[cls]
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            continue
 
-            x1, y1, x2, y2 = map(int, box.xyxy[0])
-            cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 0, 255), 2)
-            cv2.putText(frame, label, (x1, y1 - 10),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
+        debug_frame = frame.copy()
 
-            # ✅ Only check dangerous animals
-            if label in dangerous_animals:
+        results = model(frame)
+
+        for r in results:
+            for box in r.boxes:
+                cls = int(box.cls[0])
+                confidence = float(box.conf[0])
+                label = model.names[cls]
+
                 current_time = time.time()
 
-                if (label != last_detected_label and current_time - last_sent_time > cooldown):
-                    print(f"🚨 DANGEROUS DETECTED: {label} | {confidence:.2f}")
+                if label in dangerous_animals and (label != last_detected_label and current_time - last_sent_time > cooldown):
 
-                    # Save frame temporarily
-                    filename = f"{label}_{int(time.time())}.jpg"
+                    filename = f"{label}_{int(current_time)}.jpg"
                     cv2.imwrite(filename, frame)
 
-                    # ✅ FIX 2: Add latitude & longitude
                     data = {
                         "animalName": label,
                         "category": "DANGEROUS",
@@ -65,32 +68,35 @@ while True:
                         "longitude": 56.78
                     }
 
-                    try:
-                        # ✅ FIX 3: Proper file handling
-                        with open(filename, 'rb') as img:
-                            files = {'image': img}
-                            response = requests.post(API_URL, files=files, data=data)
-
-                        print("✅ ALERT SENT:", response.status_code)
-                        print("📨 Response:", response.text)
-
-                        # Optional: delete file after upload
-                        os.remove(filename)
-
-                    except Exception as e:
-                        print("❌ API Error:", e)
+                    threading.Thread(target=send_to_api, args=(filename, data)).start()
 
                     last_detected_label = label
                     last_sent_time = current_time
-            else:
-                print(f"⚪ Ignored: {label}")
 
-    cv2.imshow("🚨 Wildlife Alert System", frame)
+                x1, y1, x2, y2 = map(int, box.xyxy[0])
+                cv2.rectangle(debug_frame, (x1, y1), (x2, y2), (0, 0, 255), 2)
+                cv2.putText(debug_frame, label, (x1, y1 - 10),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
 
-    if cv2.waitKey(1) & 0xFF == ord('q'):
-        print("🛑 Detection stopped")
-        break
+        cv2.imshow("YOLO Detection", debug_frame)
 
-cap.release()
-cv2.destroyAllWindows()
-print("🔚 System shutdown")
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            break
+
+        ret, buffer = cv2.imencode('.jpg', frame)
+        frame_bytes = buffer.tobytes()
+
+        yield (b'--frame\r\n'
+               b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
+
+@app.route('/video_feed')
+def video_feed():
+    return Response(generate_frames(),
+                    mimetype='multipart/x-mixed-replace; boundary=frame')
+
+if __name__ == "__main__":
+    try:
+        app.run(host="0.0.0.0", port=5000, debug=True)
+    finally:
+        cap.release()
+        cv2.destroyAllWindows()

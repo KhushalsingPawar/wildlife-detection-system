@@ -10,17 +10,14 @@ public class Detection {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    // Animal info
     private String animalName;
     private String category;
     private double confidence;
 
-    // Location info
     private String location;
     private double latitude;
     private double longitude;
 
-    // Media
     private String imageUrl;
     private String videoUrl;
 
@@ -167,5 +164,14 @@ public class Detection {
 
     public void setStatus(String status) {
         this.status = status;
+    }
+
+    // Constructors
+    public Detection() {}
+
+    public Detection(String animalName, String category, double confidence) {
+        this.animalName = animalName;
+        this.category = category;
+        this.confidence = confidence;
     }
 }

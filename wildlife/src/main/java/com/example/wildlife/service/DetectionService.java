@@ -5,10 +5,14 @@ import com.example.wildlife.repository.DetectionRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import java.util.*;
 
 @Service
 public class DetectionService {
+
+    private static final Logger logger = LoggerFactory.getLogger(DetectionService.class);
 
     @Autowired
     private DetectionRepository repo;
@@ -17,7 +21,7 @@ public class DetectionService {
     private SimpMessagingTemplate messagingTemplate;
 
     @Autowired
-    private TwilioSmsService smsService;
+    private SmsService smsService;
 
     private final List<String> dangerousDefault = Arrays.asList("tiger", "lion", "leopard", "bear", "elephant");
     private final Map<String, Long> lastDetected = new HashMap<>();
@@ -27,8 +31,11 @@ public class DetectionService {
         String animal = (d.getAnimalName() != null) ? d.getAnimalName().toLowerCase() : "";
         long currentTime = System.currentTimeMillis();
 
+        logger.info("Processing detection for animal: {}, location: {}", d.getAnimalName(), d.getLocation());
+
         if (dangerousDefault.contains(animal)) {
             d.setCategory("DANGEROUS");
+            logger.warn("DANGEROUS animal detected: {} at {}", d.getAnimalName(), d.getLocation());
             
             // Basic Rate Limiting for alerts
             Long lastTime = lastDetected.getOrDefault(animal, 0L);
@@ -36,29 +43,41 @@ public class DetectionService {
                 // Send SMS alert
                 String smsMessage = String.format("🚨 ALERT: Dangerous animal detected - %s at %s (Confidence: %.2f)",
                         d.getAnimalName(), d.getLocation(), d.getConfidence());
-                try {
-                    smsService.sendSms(smsMessage);
+                logger.info("Attempting to send SMS alert for {}", d.getAnimalName());
+                boolean smsSent = smsService.sendSms(smsMessage);
+                if (smsSent) {
                     d.setAlertSent(true);
                     d.setAlertStatus("SENT");
-                } catch (Exception e) {
+                    logger.info("Alert SMS sent successfully for {}", d.getAnimalName());
+                } else {
                     d.setAlertSent(false);
-                    d.setAlertStatus("FAILED: " + e.getMessage());
+                    d.setAlertStatus("FAILED");
+                    logger.error("Failed to send SMS alert for {}", d.getAnimalName());
                 }
 
                 // Send WebSocket alert to all connected clients
-                messagingTemplate.convertAndSend("/topic/alerts", d);
+                try {
+                    messagingTemplate.convertAndSend("/topic/alerts", d);
+                    logger.info("WebSocket alert sent for {}", d.getAnimalName());
+                } catch (Exception e) {
+                    logger.error("Failed to send WebSocket alert: {}", e.getMessage(), e);
+                }
 
                 lastDetected.put(animal, currentTime);
             } else {
                 d.setAlertStatus("COOLDOWN_SKIPPED");
+                logger.debug("Alert skipped for {} due to cooldown", animal);
             }
         } else {
             d.setCategory("SAFE");
             d.setAlertStatus("NO_ALERT");
+            logger.debug("Safe animal detected: {}", d.getAnimalName());
         }
 
         d.setStatus("ACTIVE");
-        return repo.save(d);
+        Detection saved = repo.save(d);
+        logger.info("Detection saved to database with ID: {}", saved.getId());
+        return saved;
     }
 
     public List<Detection> getAll() {

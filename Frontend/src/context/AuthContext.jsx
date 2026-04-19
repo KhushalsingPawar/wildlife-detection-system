@@ -36,7 +36,6 @@ export function AuthProvider({ children }) {
 
   const login = useCallback(async (email, password) => {
     const { data } = await api.post('/api/auth/login', { email, password })
-    // JWT if you add it later; otherwise Spring returns the User entity only
     const t =
       data.token ??
       data.accessToken ??
@@ -62,7 +61,6 @@ export function AuthProvider({ children }) {
   }, [])
 
   const signup = useCallback(async (payload) => {
-    // Match your JPA User fields (name, email, password). Add phone/role here when those exist on the entity.
     await api.post('/api/auth/signup', {
       name: payload.name,
       email: payload.email,
@@ -99,8 +97,6 @@ export function AuthProvider({ children }) {
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
 
-// Hook colocated with provider for this app
-// eslint-disable-next-line react-refresh/only-export-components
 export function useAuth() {
   const ctx = useContext(AuthContext)
   if (!ctx) throw new Error('useAuth must be used within AuthProvider')

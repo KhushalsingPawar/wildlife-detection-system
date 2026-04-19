@@ -33,7 +33,6 @@ export function useWildlifeSocket(onAlert) {
                 connectHeaders: { Authorization: `Bearer ${token}` },
 
                 onConnect: () => {
-                    console.log('✅ WebSocket Connected');
 
                     // Subscribe to topic
                     client.subscribe('/topic/alerts', (message) => {
@@ -59,15 +58,11 @@ export function useWildlifeSocket(onAlert) {
                     console.error('❌ STOMP Error:', msg);
                 },
 
-                onWebSocketError: (error) => {
-                    console.error('❌ WebSocket Error:', error);
-                },
+                onWebSocketError: (error) => {},
 
-                onDisconnect: () => {
-                    console.log('ℹ️ WebSocket Disconnected, attempting reconnect...');
-                },
+                onDisconnect: () => {},
 
-                debug: (msg) => console.log('[STOMP]', msg),
+                debug: (msg) => {},
             });
 
             client.activate();
@@ -80,7 +75,6 @@ export function useWildlifeSocket(onAlert) {
             if (clientRef.current) {
                 clientRef.current.deactivate();
                 clientRef.current = null;
-                console.log('🛑 WebSocket Disconnected (cleanup)');
             }
         };
     }, [token]);
